@@ -230,3 +230,42 @@ def test_validate_flags_a_broken_dashboard(project: Path):
     )
     assert not result.passed
     assert any("dashboard is live" in failure for failure in result.failures)
+
+
+def test_resolve_port_prefers_explicit_then_manifest(project: Path, tmp_path: Path):
+    """run_dev_server must not fall back to a shared default port.
+
+    The scaffolded port is recorded in the manifest; using it is what keeps two
+    generated apps from colliding on 12000.
+    """
+    from buffstack.tools import _common as common
+    from buffstack.tools.server import RunServerAction
+
+    assert common.read_manifest(project)["port"] == 12099
+    assert common.resolve_port(project, None) == 12099
+    assert common.resolve_port(project, 12345) == 12345
+
+    # A project without a recorded port still gets a usable default.
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert common.resolve_port(bare, None) == common.DEFAULT_PORT
+
+    # The action leaves the port unset so the manifest value wins.
+    assert RunServerAction(project_dir="app").port is None
+
+
+def test_run_server_uses_the_scaffolded_port_end_to_end(project: Path):
+    """Start the generated app on the scaffolded port and confirm it serves."""
+    from buffstack.tools import _common as common
+    from buffstack.tools.server import RunServerAction, RunServerExecutor
+
+    executor = RunServerExecutor(str(project.parent))
+    started = executor(RunServerAction(project_dir="app", install=True))
+    try:
+        assert not started.is_error, started.content
+        assert started.url == "http://127.0.0.1:12099"
+        status, body = common.http_get("http://127.0.0.1:12099/health")
+        assert status == 200, body
+        assert body.strip() == '{"status":"ok"}'
+    finally:
+        executor(RunServerAction(project_dir="app", action="stop"))

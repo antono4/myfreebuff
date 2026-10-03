@@ -20,6 +20,7 @@ LOG_FILE = "server.log"
 PID_FILE = "server.pid"
 
 MAX_OUTPUT_CHARS = 4000
+DEFAULT_PORT = 12000
 
 
 class BuffStackObservation(Observation):  # type: ignore[misc]
@@ -72,6 +73,20 @@ def write_manifest(project: Path, updates: dict[str, Any]) -> dict[str, Any]:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
+
+
+def resolve_port(project: Path, requested: int | None) -> int:
+    """Pick the port to bind: explicit request, then the scaffolded port.
+
+    Falls back to ``DEFAULT_PORT`` for projects scaffolded before the manifest
+    recorded a port.
+    """
+    if requested:
+        return requested
+    manifest_port = read_manifest(project).get("port")
+    if isinstance(manifest_port, int) and manifest_port > 0:
+        return manifest_port
+    return DEFAULT_PORT
 
 
 def write_file(path: Path, content: str, *, executable: bool = False) -> None:

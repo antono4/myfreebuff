@@ -21,7 +21,13 @@ from buffstack.tools._common import BuffStackObservation
 
 class RunServerAction(Action):
     project_dir: str = Field(description="Project directory, relative to the workspace.")
-    port: int = Field(default=12000, description="Port to bind.")
+    port: int | None = Field(
+        default=None,
+        description=(
+            "Port to bind. Defaults to the port recorded when the project was "
+            "scaffolded."
+        ),
+    )
     action: str = Field(
         default="start",
         description="start, stop, restart, or status.",
@@ -100,7 +106,8 @@ class RunServerExecutor(ToolExecutor[RunServerAction, RunServerObservation]):
             )
 
         operation = action.action.strip().lower()
-        base_url = f"http://127.0.0.1:{action.port}"
+        port = common.resolve_port(project, action.port)
+        base_url = f"http://127.0.0.1:{port}"
 
         if operation == "status":
             return self._status(project, base_url)
@@ -108,15 +115,17 @@ class RunServerExecutor(ToolExecutor[RunServerAction, RunServerObservation]):
             return self._stop(project)
         if operation == "restart":
             self._stop(project)
-            return self._start(project, action, base_url)
+            return self._start(project, action, base_url, port)
         if operation != "start":
             return RunServerObservation(
                 message=f"Unknown action '{action.action}'. Use start, stop, restart, or status.",
                 is_error=True,
             )
-        return self._start(project, action, base_url)
+        return self._start(project, action, base_url, port)
 
-    def _start(self, project, action: RunServerAction, base_url: str) -> RunServerObservation:
+    def _start(
+        self, project, action: RunServerAction, base_url: str, port: int
+    ) -> RunServerObservation:
         running, detail = common.is_server_running(project)
         if running:
             healthy, _ = common.wait_for_health(base_url, attempts=1, delay=0)
@@ -137,7 +146,7 @@ class RunServerExecutor(ToolExecutor[RunServerAction, RunServerObservation]):
                     status="failed to install dependencies",
                 )
 
-        pid, log_path, _ = common.start_server(project, port=action.port)
+        pid, log_path, _ = common.start_server(project, port=port)
         healthy, detail = common.wait_for_health(base_url, attempts=25, delay=1.0)
 
         if not healthy:

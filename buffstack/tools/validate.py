@@ -47,7 +47,13 @@ _ROUTE = re.compile(r'@app\.(?:route|get|post|put|patch|delete)\(\s*"([^"]+)"')
 
 class ValidateAction(Action):
     project_dir: str = Field(description="Project directory, relative to the workspace.")
-    port: int = Field(default=12000, description="Port the running server uses.")
+    port: int | None = Field(
+        default=None,
+        description=(
+            "Port the running server uses. Defaults to the port recorded when the "
+            "project was scaffolded."
+        ),
+    )
     run_tests: bool = Field(default=True, description="Run pytest in the project venv.")
     probe_http: bool = Field(
         default=True,
@@ -215,7 +221,7 @@ class ValidateExecutor(ToolExecutor[ValidateAction, ValidateObservation]):
                 self._run_pytest(project, record)
 
         if action.probe_http:
-            base_url = f"http://127.0.0.1:{action.port}"
+            base_url = f"http://127.0.0.1:{common.resolve_port(project, action.port)}"
             healthy, body = common.wait_for_health(base_url, attempts=3, delay=1.0)
             record("GET /health", healthy, body[:160] or "no response")
 

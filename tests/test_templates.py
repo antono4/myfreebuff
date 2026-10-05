@@ -3,9 +3,17 @@
 from __future__ import annotations
 
 import ast
+import json
 import re
 
+import pytest
+
 from buffstack import templates
+
+FIELDS = [
+    {"name": "title", "type": "string", "required": True},
+    {"name": "amount", "type": "float", "required": True},
+]
 
 VALUES = {
     "PROJECT_NAME": "Expense Tracker",
@@ -20,12 +28,26 @@ VALUES = {
     "REFRESH_MS": 0,
     "COLUMNS_JSON": "[]",
     "FIELDS_JSON": "[]",
+    "REQUIRED_FIELDS_JSON": templates.json_literal(templates.required_fields(FIELDS)),
+    "SAMPLE_PAYLOAD_JSON": templates.json_literal(templates.sample_payload(FIELDS)),
 }
 
 
-def test_render_replaces_every_placeholder():
+def test_render_leaves_no_placeholder_behind():
     rendered = templates.render("a {{X}} b {{Y}}", X=1, Y="two")
     assert rendered == "a 1 b two"
+    assert "{{" not in rendered
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["APP_PY", "DASHBOARD_HTML", "DASHBOARD_JS", "DASHBOARD_CSS", "RUN_SH", "TEST_API_PY"],
+)
+def test_no_template_ships_an_unfilled_placeholder(name: str):
+    """A missing value must fail loudly here, not in the generated project."""
+    rendered = templates.render(getattr(templates, name), **VALUES)
+    leftovers = re.findall(r"\{\{[A-Z_]+\}\}", rendered)
+    assert not leftovers, f"{name} still contains {leftovers}"
 
 
 def test_app_template_is_valid_python():
@@ -85,6 +107,29 @@ def test_dashboard_fields_carry_type_and_required():
     assert fields == [
         {"name": "amount", "label": "Amount", "type": "float", "required": True}
     ]
+
+
+def test_required_fields_only_lists_required_ones():
+    assert templates.required_fields(FIELDS) == ["title", "amount"]
+    assert templates.required_fields([{"name": "note", "type": "string"}]) == []
+
+
+def test_sample_payload_is_valid_json_and_covers_every_field():
+    payload = templates.sample_payload(FIELDS)
+    assert set(payload) == {"title", "amount"}
+    json.dumps(payload)  # must be embeddable in the generated test file
+
+
+def test_generated_test_file_posts_a_valid_body():
+    source = templates.render(templates.TEST_API_PY, **VALUES)
+    assert '"title": "smoke"' in source
+    assert '"amount": 1.0' in source
+
+
+def test_run_sh_exports_the_port_to_the_app():
+    script = templates.render(templates.RUN_SH, **VALUES)
+    assert "export PORT" in script
+    assert script.index("export PORT") < script.index("python app.py")
 
 
 def test_test_template_compiles():

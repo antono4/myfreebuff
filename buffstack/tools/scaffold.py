@@ -146,6 +146,8 @@ class ScaffoldExecutor(ToolExecutor[ScaffoldAction, ScaffoldObservation]):
             "REFRESH_MS": 0,
             "COLUMNS_JSON": templates.json_literal(templates.dashboard_columns(fields)),
             "FIELDS_JSON": templates.json_literal(templates.dashboard_fields(fields)),
+            "REQUIRED_FIELDS_JSON": templates.json_literal(templates.required_fields(fields)),
+            "SAMPLE_PAYLOAD_JSON": templates.json_literal(templates.sample_payload(fields)),
         }
 
         written: list[str] = []

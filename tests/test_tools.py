@@ -106,6 +106,46 @@ def test_generated_api_roundtrip(project: Path):
     assert client.get("/api/expenses").get_json()["count"] == 0
 
 
+def test_generated_api_rejects_missing_required_fields(project: Path):
+    client = load_app(project).create_app().test_client()
+
+    empty = client.post("/api/expenses", json={})
+    assert empty.status_code == 400
+    assert set(empty.get_json()["fields"]) == {"title", "amount"}
+
+    blank = client.post("/api/expenses", json={"title": "  ", "amount": ""})
+    assert blank.status_code == 400
+    assert set(blank.get_json()["fields"]) == {"amount"}
+
+    ok = client.post("/api/expenses", json={"title": "ok", "amount": 0})
+    assert ok.status_code == 201
+
+
+def test_generated_api_ignores_client_supplied_id(project: Path):
+    client = load_app(project).create_app().test_client()
+
+    first = client.post("/api/expenses", json={"title": "a", "amount": 1}).get_json()
+    forged = client.post(
+        "/api/expenses", json={"id": 999, "title": "b", "amount": 2}
+    ).get_json()
+    assert forged["id"] != 999
+    assert forged["id"] != first["id"]
+
+    listed = client.get("/api/expenses").get_json()
+    assert listed["count"] == 2
+    assert len(listed["items"]) == 2
+
+
+def test_generated_api_get_single_record(project: Path):
+    client = load_app(project).create_app().test_client()
+    record = client.post("/api/expenses", json={"title": "a", "amount": 1}).get_json()
+
+    fetched = client.get(f"/api/expenses/{record['id']}")
+    assert fetched.status_code == 200
+    assert fetched.get_json()["title"] == "a"
+    assert client.get("/api/expenses/424242").status_code == 404
+
+
 def test_generated_dashboard_is_served(project: Path):
     module = load_app(project)
     client = module.create_app().test_client()
@@ -252,6 +292,16 @@ def test_resolve_port_prefers_explicit_then_manifest(project: Path, tmp_path: Pa
 
     # The action leaves the port unset so the manifest value wins.
     assert RunServerAction(project_dir="app").port is None
+
+
+def test_validate_defaults_to_the_scaffolded_port(project: Path):
+    """Validation must probe the port the app was scaffolded on."""
+    from buffstack.tools import _common as common
+    from buffstack.tools.validate import ValidateAction
+
+    assert common.read_manifest(project)["port"] == 12099
+    assert ValidateAction(project_dir="app").port is None
+    assert common.resolve_port(project, ValidateAction(project_dir="app").port) == 12099
 
 
 def test_run_server_uses_the_scaffolded_port_end_to_end(project: Path):

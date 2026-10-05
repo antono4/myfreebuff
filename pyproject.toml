@@ -11,7 +11,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# flask is a runtime dep of the apps BuffStack generates; the test suite imports
+# a generated app, so it is needed here too.
+dev = ["pytest>=8.0", "flask>=3.0"]
 
 [project.scripts]
 buffstack = "buffstack.cli:main"

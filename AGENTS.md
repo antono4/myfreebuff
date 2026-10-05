@@ -20,7 +20,7 @@ single-loop root-agent architecture of `CodebuffAI/freebuff`.
 ## Commands
 
 ```bash
-pip install -e ".[dev]"     # openhands-sdk, openhands-tools, pytest
+pip install -e ".[dev]"     # openhands-sdk, openhands-tools, pytest, flask
 OPENHANDS_SUPPRESS_BANNER=1 python3 -m pytest -q
 python3 -m compileall -q buffstack
 ```
